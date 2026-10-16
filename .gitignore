@@ -1,0 +1,11 @@
+# pylon arşivleri (~1 GB)
+downloads/
+
+*.log
+*.part
+
+# Yerel araç önbellekleri
+graft/
+.claude/
+.vscode/
+.idea/

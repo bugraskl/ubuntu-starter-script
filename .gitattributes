@@ -1,0 +1,2 @@
+# Bash scriptleri Windows satır sonlarıyla (CRLF) çalışmaz
+* text=auto eol=lf

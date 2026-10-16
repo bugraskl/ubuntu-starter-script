@@ -1,0 +1,9 @@
+# Python paketleri — sanal ortama (/opt/venv) kurulur.
+# Sürüm sabitlemek isterseniz örn. "pypylon==26.8" şeklinde yazın.
+# Kurulumdan sonra tam sürüm listesi: /opt/venv/requirements.lock.txt
+
+numpy
+opencv-python        # görüntü işleme (cv2)
+pypylon              # Basler kameralar (pylon runtime paketin içinde gelir)
+python-snap7         # Siemens S7 PLC haberleşmesi (3.x: saf Python, C kütüphanesi gerekmez)
+PyMySQL              # Python'dan MySQL'e yazma/okuma
