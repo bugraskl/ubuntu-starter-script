@@ -66,7 +66,7 @@ readonly WEB_PACKAGES=(
 # -----------------------------------------------------------------------------
 #  Çıktı yardımcıları
 # -----------------------------------------------------------------------------
-if [[ -t 1 ]]; then
+if [[ -t 1 || ${UBUNTU_STARTER_COLOR:-0} == 1 ]]; then
   C_RESET=$'\e[0m' C_BOLD=$'\e[1m' C_RED=$'\e[31m' C_GREEN=$'\e[32m' C_YELLOW=$'\e[33m' C_BLUE=$'\e[34m'
 else
   C_RESET="" C_BOLD="" C_RED="" C_GREEN="" C_YELLOW="" C_BLUE=""
@@ -89,8 +89,12 @@ Seçenekler:
   --only ADIM[,ADIM...]   Sadece bu adımları çalıştır (config.env bayraklarını yok sayar)
   --skip ADIM[,ADIM...]   Bu adımları atla
   --config DOSYA          Farklı bir ayar dosyası kullan (varsayılan: config.env)
+  --foreground            Kurulumu arka plan servisi yerine doğrudan bu terminalde çalıştır
   --list                  Adımları listele
   -h, --help              Bu yardımı göster
+
+Kurulum bir sistem servisi olarak arka planda çalışır; terminali ya da uzak
+masaüstü bağlantısını kapatmak kurulumu yarıda kesmez.
 
 Örnekler:
   ./install.sh
@@ -115,6 +119,7 @@ ORIG_ARGS=("$@")
 ONLY_STEPS=""
 SKIP_STEPS=""
 CONFIG_FILE="$SCRIPT_DIR/config.env"
+FOREGROUND=0
 
 need_value() { [[ -n ${2:-} && ${2:0:1} != "-" ]] || { echo "Hata: $1 bir değer bekliyor." >&2; exit 2; }; }
 
@@ -128,6 +133,7 @@ while (($#)); do
     --skip=*)  SKIP_STEPS=${1#*=}; shift ;;
     --config)  need_value "$1" "${2:-}"; CONFIG_FILE=$2; shift 2 ;;
     --config=*) CONFIG_FILE=${1#*=}; shift ;;
+    --foreground) FOREGROUND=1; shift ;;
     *) echo "Bilinmeyen parametre: $1" >&2; usage; exit 2 ;;
   esac
 done
@@ -187,7 +193,7 @@ fi
 : "${KIOSK_AUTOLOGIN:=1}"
 : "${KIOSK_DISABLE_SCREEN_BLANK:=1}"
 : "${CHROMIUM_HOLD_UPDATES:=$KIOSK_ENABLE}"
-: "${DISABLE_WAYLAND:=0}"
+: "${DISABLE_WAYLAND:=1}"
 : "${DISABLE_AUTO_UPDATES:=0}"
 : "${ALLOW_UNSUPPORTED_OS:=0}"
 
@@ -195,7 +201,9 @@ fi
 [[ $PYTHON_REQUIREMENTS = /* ]] || PYTHON_REQUIREMENTS="$SCRIPT_DIR/$PYTHON_REQUIREMENTS"
 
 export DEBIAN_FRONTEND=noninteractive
-export NEEDRESTART_MODE=a            # 24.04'te apt sonrası "servisleri yeniden başlat" sorusunu engeller
+# apt sonrası servisleri kendiliğinden yeniden başlatma (uzak masaüstü bağlantısı kopmasın),
+# sadece listele; kurulum sonunda zaten yeniden başlatma öneriliyor.
+export NEEDRESTART_MODE=l
 export PIP_DISABLE_PIP_VERSION_CHECK=1
 cd /
 
@@ -204,13 +212,28 @@ cd /
 # -----------------------------------------------------------------------------
 LOG_DIR=/var/log/ubuntu-starter
 mkdir -p "$LOG_DIR"
-LOG_FILE="$LOG_DIR/install-$(date +%Y%m%d-%H%M%S).log"
-exec > >(tee -a "$LOG_FILE") 2>&1
+LOG_FILE="${UBUNTU_STARTER_LOG:-$LOG_DIR/install-$(date +%Y%m%d-%H%M%S).log}"
+STATE_DIR=""
+NOTES_FILE=""
 
-STATE_DIR="$(mktemp -d /tmp/ubuntu-starter.XXXXXX)"
-NOTES_FILE="$STATE_DIR/notes"
-touch "$NOTES_FILE"
-trap 'rm -rf "$STATE_DIR"' EXIT
+setup_logging() {
+  exec > >(tee -a "$LOG_FILE") 2>&1
+  STATE_DIR="$(mktemp -d /tmp/ubuntu-starter.XXXXXX)"
+  NOTES_FILE="$STATE_DIR/notes"
+  touch "$NOTES_FILE"
+  trap on_exit EXIT
+}
+
+on_exit() {
+  local rc=$?
+  # Arka plan servisi olarak çalışıyorsak sonucu, izleyen terminale bildir
+  if [[ -n ${UBUNTU_STARTER_STATUS:-} ]]; then
+    echo "$rc" > "$UBUNTU_STARTER_STATUS"
+  fi
+  if [[ -n $STATE_DIR ]]; then
+    rm -rf "$STATE_DIR"
+  fi
+}
 
 note()        { printf '%s\n' "$*" >> "$NOTES_FILE"; }
 need_reboot() { touch "$STATE_DIR/reboot"; }
@@ -314,7 +337,8 @@ preflight() {
   TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
   ok "Hedef kullanıcı: $TARGET_USER ($TARGET_HOME)"
 
-  if getent hosts archive.ubuntu.com >/dev/null 2>&1 && timeout 10 bash -c '</dev/tcp/pypi.org/443' 2>/dev/null; then
+  if timeout 20 getent hosts archive.ubuntu.com >/dev/null 2>&1 \
+     && timeout 20 bash -c '</dev/tcp/pypi.org/443' 2>/dev/null; then
     ok "İnternet bağlantısı var"
   else
     die "İnternet bağlantısı yok ya da DNS çalışmıyor (archive.ubuntu.com / pypi.org erişilemedi)."
@@ -330,6 +354,84 @@ preflight() {
 
   ok "Ayar dosyası: $( [[ -f $CONFIG_FILE ]] && echo "$CONFIG_FILE" || echo "yok (varsayılanlar)" )"
   ok "Günlük dosyası: $LOG_FILE"
+}
+
+# Önceki bir kurulum yarıda kesildiyse (bağlantı koptu, bilgisayar kapandı...) paketleri tamamla.
+# Aksi halde apt hiçbir şey kurmaz ve yeni çekirdek açılış dosyası (initramfs) olmadan kalır.
+repair_package_state() {
+  local audit
+  audit="$(dpkg --audit 2>/dev/null || true)"
+  if [[ -z $audit ]]; then
+    return 0
+  fi
+
+  section "Yarım kalmış paket kurulumu tamamlanıyor"
+  warn "Önceki bir apt/dpkg işlemi yarıda kesilmiş, tamamlanıyor..."
+  apt_wait_lock
+  if ! dpkg --force-confdef --force-confold --configure -a || ! apt_get -f install; then
+    die "Paket sistemi onarılamadı. Hata ayrıntısı yukarıda; elle denemek için:  sudo dpkg --configure -a"
+  fi
+  ok "Yarım kalan paketler tamamlandı"
+  need_reboot
+}
+
+# -----------------------------------------------------------------------------
+#  Arka plan servisi: kurulum terminalden/oturumdan bağımsız çalışır
+# -----------------------------------------------------------------------------
+detach_to_service() {
+  local running
+  running="$(systemctl list-units 'ubuntu-starter-*.service' --state=active --no-legend --plain 2>/dev/null | awk '{print $1}')"
+  if [[ -n $running ]]; then
+    local env_line running_log
+    env_line="$(systemctl show -p Environment --value "$running" 2>/dev/null || true)"
+    running_log="$(tr ' ' '\n' <<< "$env_line" | sed -n 's/^UBUNTU_STARTER_LOG=//p')"
+    warn "Kurulum zaten arka planda çalışıyor ($running), ona bağlanılıyor."
+    follow_service "$running" "$running_log"
+  fi
+
+  local unit color=0
+  unit="ubuntu-starter-$(date +%Y%m%d-%H%M%S)"
+  [[ -t 1 ]] && color=1
+  local args=(--config "$CONFIG_FILE")
+  [[ -n $ONLY_STEPS ]] && args+=(--only "$ONLY_STEPS")
+  [[ -n $SKIP_STEPS ]] && args+=(--skip "$SKIP_STEPS")
+
+  : > "$LOG_FILE"
+  systemd-run --quiet --unit="$unit" --collect \
+    --description="ubuntu-starter-script kurulumu" \
+    --setenv=UBUNTU_STARTER_DETACHED=1 \
+    --setenv=UBUNTU_STARTER_LOG="$LOG_FILE" \
+    --setenv=UBUNTU_STARTER_STATUS="$LOG_FILE.status" \
+    --setenv=UBUNTU_STARTER_COLOR="$color" \
+    --setenv=SUDO_USER="$TARGET_USER" \
+    bash "$SCRIPT_PATH" "${args[@]}"
+  follow_service "$unit" "$LOG_FILE"
+}
+
+follow_service() {
+  local unit=$1 log=$2 tail_pid rc=1
+  printf '%s%sKurulum arka planda sistem servisi olarak çalışıyor (%s).%s\n' "$C_BOLD" "$C_GREEN" "$unit" "$C_RESET"
+  printf '  Bu pencereyi ya da uzak masaüstü bağlantısını kapatsanız da kurulum devam eder.\n'
+  printf '  Tekrar izlemek için:  tail -f %s\n' "$log"
+  printf '%s  Kurulum bitene kadar bilgisayarı KAPATMAYIN ve YENİDEN BAŞLATMAYIN.%s\n\n' "$C_YELLOW" "$C_RESET"
+
+  tail -n +1 -F "$log" 2>/dev/null &
+  tail_pid=$!
+  # shellcheck disable=SC2064
+  trap "kill $tail_pid 2>/dev/null; printf '\nİzleme durduruldu, kurulum arka planda devam ediyor:  tail -f %s\n' '$log'; exit 0" INT TERM HUP
+
+  while systemctl is-active --quiet "$unit"; do
+    sleep 2
+  done
+  sleep 1
+  kill "$tail_pid" 2>/dev/null || true
+  wait "$tail_pid" 2>/dev/null || true
+
+  if [[ -f $log.status ]]; then
+    rc="$(< "$log.status")"
+    rm -f "$log.status"
+  fi
+  exit "$rc"
 }
 
 # -----------------------------------------------------------------------------
@@ -914,8 +1016,15 @@ print_summary() {
 }
 
 main() {
+  if [[ -z ${UBUNTU_STARTER_DETACHED:-} ]] && ! is_on "$FOREGROUND" \
+     && has_systemd && command -v systemd-run >/dev/null 2>&1; then
+    detach_to_service   # geri dönmez
+  fi
+
+  setup_logging
   printf '%subuntu-starter-script v%s%s — %s\n' "$C_BOLD" "$SCRIPT_VERSION" "$C_RESET" "$(date '+%Y-%m-%d %H:%M')"
   preflight
+  repair_package_state
 
   local step
   for step in "${ALL_STEPS[@]}"; do

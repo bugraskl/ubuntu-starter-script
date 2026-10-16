@@ -29,6 +29,14 @@ nano config.env          # isteğe bağlı: neyin kurulacağını seçin
 
 Script kendini `sudo` ile yeniden başlatır, şifrenizi bir kez sorar ve gerisini kendisi yapar. Kurulum bittiğinde bir özet yazar; özette **yeniden başlatın** diyorsa `sudo reboot` yapın (kamera ayarları, grup üyelikleri ve kiosk modu bunun ardından devreye girer).
 
+Kurulum **arka planda bir sistem servisi** olarak çalışır; terminal sadece ilerlemeyi gösterir. Terminali ya da RustDesk/AnyDesk bağlantısını kapatmak kurulumu yarıda kesmez. Tekrar izlemek için:
+
+```bash
+tail -f /var/log/ubuntu-starter/install-*.log
+```
+
+> ⚠️ Kurulum bitene kadar bilgisayarı **kapatmayın / yeniden başlatmayın**. Sistem güncellemesi yarıda kesilirse yeni çekirdek açılmayabilir (GRUB menüsüne geri döner). Böyle olursa GRUB'da *Advanced options for Ubuntu* → eski çekirdeği seçerek açın ve `./install.sh` komutunu tekrar çalıştırın; script yarım kalan paketleri kendisi tamamlar.
+
 > Script'i Windows'tan USB bellekle kopyalarsanız satır sonları bozulabilir. Bu durumda: `sed -i 's/\r$//' install.sh`
 
 Kurulum günlüğü: `/var/log/ubuntu-starter/install-TARİH.log`
@@ -46,7 +54,7 @@ Her bileşen `1` (kur) / `0` (kurma) ile açılıp kapatılır. En önemlileri:
 | `KIOSK_ENABLE` | 0 | Açılışta Chromium'u tam ekran `KIOSK_URL` ile başlat |
 | `DB_NAME` / `DB_USER` / `DB_PASS` | app_db / app_user / *rastgele* | Uygulama veritabanı |
 | `VENV_DIR` | /opt/venv | Python paketlerinin kurulduğu sanal ortam |
-| `DISABLE_WAYLAND` | 0 | Xorg oturumu (uzak masaüstü/ekran araçları için daha uyumlu) |
+| `DISABLE_WAYLAND` | 1 | Xorg oturumu: RustDesk/AnyDesk'te kopyala-yapıştır ve giriş ekranı erişimi için gerekli |
 | `DISABLE_AUTO_UPDATES` | 0 | Üretim makinesinde otomatik güncellemeleri kapat |
 
 Python paketleri `requirements.txt` dosyasından kurulur; listeye paket ekleyip `./install.sh --only python_packages` çalıştırmanız yeterli.
