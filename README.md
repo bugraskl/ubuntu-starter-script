@@ -21,7 +21,7 @@ Ubuntu 24.04 LTS kurulu bir makineyi tek komutla görüntü işleme / HMI makine
 sudo apt update && sudo apt install -y git
 git clone https://github.com/bugraskl/ubuntu-starter-script.git
 cd ubuntu-starter-script
-nano config.env          # isteğe bağlı: neyin kurulacağını seçin
+nano config.local.env    # isteğe bağlı: config.env'deki değerlerden değiştirmek istedikleriniz
 ./install.sh
 ```
 
@@ -42,6 +42,14 @@ tail -f /var/log/ubuntu-starter/install-*.log
 Kurulum günlüğü: `/var/log/ubuntu-starter/install-TARİH.log`
 
 ## Ayarlar (`config.env`)
+
+Varsayılan ayarlar `config.env` dosyasındadır. **Bu dosyayı değiştirmeyin**; değiştirmek istediğiniz satırları aynı klasörde `config.local.env` dosyasına yazın. O dosya git'te takip edilmez ve `config.env`'deki değerlerin üzerine yazar; böylece `git pull` hiç çakışmaz. Örnek `config.local.env`:
+
+```bash
+DB_NAME="yeditek"
+DB_USER="yeditek"
+KIOSK_ENABLE=1
+```
 
 Her bileşen `1` (kur) / `0` (kurma) ile açılıp kapatılır. En önemlileri:
 

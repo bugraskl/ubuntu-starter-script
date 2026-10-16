@@ -154,15 +154,25 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # -----------------------------------------------------------------------------
-#  Ayarlar: config.env -> varsayılanlar
+#  Ayarlar: config.env -> config.local.env -> varsayılanlar
+#  config.local.env git'te takip edilmez; makineye özel ayarlar oraya yazılır,
+#  böylece 'git pull' ile gelen config.env güncellemeleri çakışmaz.
 # -----------------------------------------------------------------------------
-if [[ -f $CONFIG_FILE ]]; then
-  CONFIG_FILE="$(readlink -f "$CONFIG_FILE")"
+load_config() {
   # Windows'ta düzenlenmiş dosyalardaki CRLF satır sonlarını tolere et
   # shellcheck disable=SC1090
-  source <(sed 's/\r$//' "$CONFIG_FILE")
+  source <(sed 's/\r$//' "$1")
+}
+
+if [[ -f $CONFIG_FILE ]]; then
+  CONFIG_FILE="$(readlink -f "$CONFIG_FILE")"
+  load_config "$CONFIG_FILE"
 elif [[ $CONFIG_FILE != "$SCRIPT_DIR/config.env" ]]; then
   die "Ayar dosyası bulunamadı: $CONFIG_FILE"
+fi
+LOCAL_CONFIG_FILE="${CONFIG_FILE%.env}.local.env"
+if [[ -f $LOCAL_CONFIG_FILE ]]; then
+  load_config "$LOCAL_CONFIG_FILE"
 fi
 
 : "${TARGET_USER:=${SUDO_USER:-}}"
@@ -359,6 +369,9 @@ preflight() {
   fi
 
   ok "Ayar dosyası: $( [[ -f $CONFIG_FILE ]] && echo "$CONFIG_FILE" || echo "yok (varsayılanlar)" )"
+  if [[ -f $LOCAL_CONFIG_FILE ]]; then
+    ok "Makineye özel ayarlar: $LOCAL_CONFIG_FILE"
+  fi
   ok "Günlük dosyası: $LOG_FILE"
 }
 

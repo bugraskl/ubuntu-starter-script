@@ -4,6 +4,9 @@ downloads/
 *.log
 *.part
 
+# Makineye özel ayarlar (git pull ile çakışmasın)
+*.local.env
+
 # Yerel araç önbellekleri
 graft/
 .claude/
