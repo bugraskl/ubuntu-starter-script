@@ -16,7 +16,12 @@
 # =============================================================================
 set -Eeuo pipefail
 
-readonly SCRIPT_VERSION="1.0.0"
+# Türkçe (tr_TR) dil ayarında [A-Za-z] gibi aralıklar "i" ve "I" harflerini kapsamaz;
+# karşılaştırma/sıralama kurallarını dilden bağımsız yap (mesajlar Türkçe kalır).
+unset LC_ALL
+export LC_COLLATE=C
+
+readonly SCRIPT_VERSION="1.0.1"
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 readonly SCRIPT_PATH SCRIPT_DIR
