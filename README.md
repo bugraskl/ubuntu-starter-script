@@ -25,6 +25,8 @@ nano config.env          # isteğe bağlı: neyin kurulacağını seçin
 ./install.sh
 ```
 
+> Repo gizli olduğu için `git clone` GitHub kullanıcı adı ve şifre yerine bir **Personal Access Token** ister (GitHub → Settings → Developer settings → Tokens). Alternatif: repoyu ZIP olarak indirip makineye kopyalayın.
+
 Script kendini `sudo` ile yeniden başlatır, şifrenizi bir kez sorar ve gerisini kendisi yapar. Kurulum bittiğinde bir özet yazar; özette **yeniden başlatın** diyorsa `sudo reboot` yapın (kamera ayarları, grup üyelikleri ve kiosk modu bunun ardından devreye girer).
 
 > Script'i Windows'tan USB bellekle kopyalarsanız satır sonları bozulabilir. Bu durumda: `sed -i 's/\r$//' install.sh`
