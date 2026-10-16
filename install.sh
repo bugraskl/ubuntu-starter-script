@@ -184,6 +184,7 @@ fi
 : "${DB_PASS:=}"
 : "${PHP_TIMEZONE:=$TIMEZONE}"
 : "${VENV_DIR:=/opt/venv}"
+: "${VENV_AUTO_ACTIVATE:=1}"
 : "${PYTHON_REQUIREMENTS:=requirements.txt}"
 : "${PYLON_VERSION:=26.08.1}"
 : "${PYLON_URL_X86_64:=https://downloads-ctf.baslerweb.com/dg51pdwahxgw/2RfxolIRgwIS2XcOo6WUbR/8b92c4d22d355d6423a1e2adf6fa09be/pylon-26.08.1_linux-x86_64_debs.tar.gz}"
@@ -490,7 +491,27 @@ step_python() {
   run_as_user "$VENV_DIR/bin/python" -m pip install --upgrade pip setuptools wheel
 
   ok "$(python3 --version), venv: $VENV_DIR"
-  note "Python sanal ortamını etkinleştirmek için:  source $VENV_DIR/bin/activate"
+
+  # Her yeni terminalde venv'i otomatik etkinleştir (sadece hedef kullanıcı için;
+  # sistem araçları ve root /usr/bin/python3 kullanmaya devam eder)
+  local bashrc="$TARGET_HOME/.bashrc"
+  [[ -f $bashrc ]] || touch "$bashrc"
+  sed -i '/^# >>> ubuntu-starter venv >>>$/,/^# <<< ubuntu-starter venv <<<$/d' "$bashrc"
+  if is_on "$VENV_AUTO_ACTIVATE"; then
+    cat >> "$bashrc" <<EOF
+# >>> ubuntu-starter venv >>>
+# ubuntu-starter-script: Python sanal ortamını her terminalde otomatik etkinleştir
+if [ -z "\${VIRTUAL_ENV:-}" ] && [ -f "$VENV_DIR/bin/activate" ]; then
+    . "$VENV_DIR/bin/activate"
+fi
+# <<< ubuntu-starter venv <<<
+EOF
+    ok "Yeni açılan her terminalde $VENV_DIR otomatik etkin"
+    note "python / pip komutları her terminalde doğrudan $VENV_DIR sanal ortamını kullanır."
+  else
+    note "Python sanal ortamını etkinleştirmek için:  source $VENV_DIR/bin/activate"
+  fi
+  chown "$TARGET_USER:" "$bashrc"
 }
 
 # -----------------------------------------------------------------------------

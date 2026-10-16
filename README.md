@@ -54,6 +54,7 @@ Her bileşen `1` (kur) / `0` (kurma) ile açılıp kapatılır. En önemlileri:
 | `KIOSK_ENABLE` | 0 | Açılışta Chromium'u tam ekran `KIOSK_URL` ile başlat |
 | `DB_NAME` / `DB_USER` / `DB_PASS` | app_db / app_user / *rastgele* | Uygulama veritabanı |
 | `VENV_DIR` | /opt/venv | Python paketlerinin kurulduğu sanal ortam |
+| `VENV_AUTO_ACTIVATE` | 1 | Her yeni terminal bu sanal ortamla açılır (`python`, `pip` doğrudan venv'i kullanır) |
 | `DISABLE_WAYLAND` | 1 | Xorg oturumu: RustDesk/AnyDesk'te kopyala-yapıştır ve giriş ekranı erişimi için gerekli |
 | `DISABLE_AUTO_UPDATES` | 0 | Üretim makinesinde otomatik güncellemeleri kapat |
 
@@ -85,7 +86,7 @@ Script tekrar çalıştırılabilir: kurulu olanları atlar, bir adım hata veri
 
 ## Kurulumdan sonra
 
-- **Python:** `source /opt/venv/bin/activate` → `python -c "import cv2, snap7; from pypylon import pylon"`
+- **Python:** yeni açılan her terminal `/opt/venv` sanal ortamıyla gelir; `python` ve `pip` doğrudan onu kullanır. Terminal dışından çalışacak programlarda (servis, otomatik başlatma, masaüstü kısayolu) etkinleştirmeye gerek yok, yorumlayıcıyı tam yoluyla verin: `/opt/venv/bin/python program.py` ya da dosyanın ilk satırına `#!/opt/venv/bin/python`.
 - **pylon Viewer:** uygulama menüsünde *pylon Viewer* ya da `/opt/pylon/bin/pylonviewer`
 - **Web arayüzü:** dosyaları `/var/www/html` içine koyun (kullanıcınız `www-data` grubunda, sudo gerekmez) → `http://localhost/`
 - **MySQL bilgileri:** `~/ubuntu-starter-credentials.txt` (root için: `sudo mysql`)
